@@ -1,5 +1,9 @@
-cmake_minimum_required(VERSION 3.1.3)
+cmake_minimum_required(VERSION 3.10)
 project(opengv VERSION 1.0 LANGUAGES CXX)
+
+# Include module with fuction 'write_basic_package_version_file'
+include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)
 
 # Set the build type.  Options are:
 #
@@ -8,13 +12,6 @@ project(opengv VERSION 1.0 LANGUAGES CXX)
 #  Release (CMAKE_C_FLAGS_RELEASE or CMAKE_CXX_FLAGS_RELEASE)
 #  RelWithDebInfo (CMAKE_C_FLAGS_RELWITHDEBINFO or CMAKE_CXX_FLAGS_RELWITHDEBINFO)
 #  MinSizeRel (CMAKE_C_FLAGS_MINSIZEREL or CMAKE_CXX_FLAGS_MINSIZEREL)
-
-set(CMAKE_BUILD_TYPE Release)
-if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Debug CACHE STRING
-       "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
-       FORCE )
-endif()
 
 #set the default path for built executables to the "bin" directory
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
@@ -41,7 +38,7 @@ ELSE()
           "(arm)|(ARM)|(armhf)|(ARMHF)|(armel)|(ARMEL)")
     add_definitions (-march=armv7-a)
   ELSE ()
-    add_definitions (-march=native) #TODO use correct c++11 def once everybody has moved to gcc 4.7 # for now I even removed std=gnu++0x
+#    add_definitions (-march=native) #TODO use correct c++11 def once everybody has moved to gcc 4.7 # for now I even removed std=gnu++0x
   ENDIF()
   add_definitions (
     -O3
@@ -186,8 +183,9 @@ add_library( random_generators test/random_generators.cpp test/random_generators
 set_target_properties( opengv random_generators PROPERTIES
                     SOVERSION ${PROJECT_VERSION}
                     VERSION ${PROJECT_VERSION}
-                    CXX_STANDARD 11
+                    CXX_STANDARD 17
                     CXX_STANDARD_REQUIRED ON
+		    LINK_WHAT_YOU_USE OFF
                     DEBUG_POSTFIX d )
 
 target_include_directories( opengv PUBLIC 
@@ -334,65 +332,51 @@ IF (BUILD_TESTS)
     test_Sturm
 
     PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     DEBUG_POSTFIX d )
 
 
 ENDIF()
 
-# Configuration
-set(config_install_dir "lib/cmake/${PROJECT_NAME}-${PROJECT_VERSION}")
-set(include_install_dir "include")
-set(version_config "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake")
-set(project_config "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake")
-set(targets_export_name "${PROJECT_NAME}Targets")
+# Specify how to install the target.
+# The EXPORT keyword associates the installed target files with an "export" called
+# ${PROJECT_NAME}Targets. The file will later be generated when later install(EXPORT) is
+# called on that target.
+# Note that this install does not install the header files yet.
+install(TARGETS ${PROJECT_NAME}
+  EXPORT ${PROJECT_NAME}Targets
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  INCLUDES DESTINATION include
+  )
 
-# Include module with fuction 'write_basic_package_version_file'
-include(CMakePackageConfigHelpers)
+install(DIRECTORY include/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-# Configure '<PROJECT-NAME>ConfigVersion.cmake'
-# Note: PROJECT_VERSION is used as a VERSION
+
+# generate the ConfigVersion.cmake file that will be included by Config.cmake
 write_basic_package_version_file(
-    "${version_config}" COMPATIBILITY SameMajorVersion )
+  ${PROJECT_NAME}ConfigVersion.cmake
+  VERSION ${PACKAGE_VERSION}
+  COMPATIBILITY AnyNewerVersion
+  )
 
-# Configure '<PROJECT-NAME>Config.cmake'
-# Use variables:
-#   * targets_export_name
-#   * PROJECT_NAME
-configure_package_config_file(
-    "modules/Config.cmake.in"
-    "${project_config}"
-    INSTALL_DESTINATION "${config_install_dir}")
+# generate the Config.cmake file
+configure_file(modules/Config.cmake.in ${PROJECT_NAME}Config.cmake @ONLY)
 
-# Export '<PROJECT-NAME>Targets.cmake' to build dir (to find package in build dir without install)
-export(TARGETS opengv FILE "${CMAKE_CURRENT_BINARY_DIR}/${targets_export_name}.cmake")
+# generate the Targets.cmake file from the export info learned during the
+# installation of the target
+install(EXPORT ${PROJECT_NAME}Targets
+  FILE ${PROJECT_NAME}Targets.cmake
+  NAMESPACE ${PROJECT_NAME}::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+  )
 
-# Targets:
-install(TARGETS opengv
-        EXPORT "${targets_export_name}"
-        LIBRARY DESTINATION "lib"
-        ARCHIVE DESTINATION "lib"
-        RUNTIME DESTINATION "bin"
-        INCLUDES DESTINATION "${include_install_dir}")
-
-# Config
-#   * <prefix>/lib/cmake/opengv/opengvConfig.cmake
-#   * <prefix>/lib/cmake/opengv/opengvConfigVersion.cmake
-install(FILES "${project_config}" "${version_config}"
-        DESTINATION "${config_install_dir}")
-
-# Config
-#   * <prefix>/lib/cmake/opengv/opengvTargets.cmake
-install(EXPORT "${targets_export_name}"
-        NAMESPACE "${namespace}"
-        DESTINATION "${config_install_dir}")
-
-# Headers
-install(DIRECTORY include/ 
-        DESTINATION ${include_install_dir} 
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
-
+# install the generated version and config files
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+        )
 
 if (BUILD_PYTHON)
   add_subdirectory( python )
